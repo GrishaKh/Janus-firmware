@@ -1,0 +1,14 @@
+# Source of truth for Arduino library versions used by Janus-firmware.
+# Format: one line per library, "Library Name@version".
+# Lines beginning with "#" are comments; blank lines are ignored.
+# Used by scripts/lib-install.sh and CI.
+#
+# To upgrade: edit a version here, run ./scripts/lib-install.sh,
+# verify the build is green, commit the change.
+
+ArduinoJson@7.2.0
+Adafruit PN532@1.3.4
+MFRC522@1.4.11
+TinyGSM@0.12.0
+RTClib@2.1.4
+StreamDebugger@1.0.1

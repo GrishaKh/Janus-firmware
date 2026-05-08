@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compile (esp32:esp32)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.0.4
+
+      - name: Cache Arduino data
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.arduino15
+            ~/Arduino/libraries
+          key: arduino-${{ runner.os }}-${{ hashFiles('arduino-lib-list.txt', 'scripts/lib-install.sh') }}
+          restore-keys: arduino-${{ runner.os }}-
+
+      - name: Install core + libraries
+        run: ./scripts/lib-install.sh
+
+      - name: Compile sketch
+        run: ./scripts/build.sh
