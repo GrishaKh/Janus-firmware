@@ -6,27 +6,32 @@
 #define JANUS_FW_VERSION "0.2.0-p1"
 
 // ----- RFID driver selection -----
-// Default: PN532 over SPI (matches the blue Adafruit-style board).
-// To switch to MFRC522, define this before including Config.h, or uncomment:
-// #define RFID_DRIVER_MFRC522
+// Default: MFRC522 over SPI (the blue RC522 board). To experiment with PN532
+// later, define RFID_DRIVER_PN532 before including Config.h.
+// #define RFID_DRIVER_PN532
 
 // ----- v1 pin map (ESP32-WROOM-32, 38-pin DevKit) -----
 
-// PN532 over SPI (VSPI defaults)
+// RC522 (MFRC522) over SPI — VSPI defaults. RST is wired (the chip really
+// uses it, unlike PN532 where the IRQ pin was optional).
 #define PIN_RFID_SCK     18
 #define PIN_RFID_MISO    19
 #define PIN_RFID_MOSI    23
 #define PIN_RFID_SS       5
-#define PIN_RFID_IRQ      4   // optional, leaves wire free if unused
+#define PIN_RFID_RST      4
 
-// DS3231 over I2C (default ESP32 I2C)
-#define PIN_I2C_SDA      21
-#define PIN_I2C_SCL      22
+// DS1302 over 3-wire serial (NOT I2C — the DS1302 has its own bit-banged
+// protocol). Use the Makuna `Rtc` library, ThreeWire bus.
+#define PIN_RTC_CE       13   // chip-enable / reset (output)
+#define PIN_RTC_IO       14   // bidirectional data line
+#define PIN_RTC_SCLK     32   // serial clock (output)
 
-// SIM800L over UART2 (ESP32 UART2 defaults)
-#define PIN_SIM_TX       17   // ESP32 transmits to SIM800L on this pin
-#define PIN_SIM_RX       16   // ESP32 receives from SIM800L on this pin (use level shift)
-#define PIN_SIM_PWRKEY   25   // reserved; many breakouts auto-start
+// SIM800C V6.1 over UART2 — ESP32 UART2 defaults. The V6.1 carrier has an
+// onboard LDO and is friendlier than a raw SIM800L; the 1000 uF cap across
+// VCC/GND is still recommended for transmit bursts.
+#define PIN_SIM_TX       17   // ESP32 transmits to SIM800C on this pin
+#define PIN_SIM_RX       16   // ESP32 receives from SIM800C on this pin
+#define PIN_SIM_PWRKEY   25   // reserved; V6.1 typically auto-starts
 
 // Built-in status LED on most ESP32 DevKits
 #define PIN_STATUS_LED    2
@@ -43,6 +48,9 @@
 //   #define PIN_TAMPER     35
 // SD card CS (shares VSPI with RFID)
 //   #define PIN_SD_CS      15
+// I2C bus (free in v1; reserved for OLED SSD1306 in v2)
+//   #define PIN_I2C_SDA    21
+//   #define PIN_I2C_SCL    22
 
 // ----- Intervals (milliseconds) -----
 #define HEARTBEAT_INTERVAL_MS    30000UL    // 30 s — /api/attendance/heartbeat

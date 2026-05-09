@@ -42,13 +42,13 @@ Mismatched baud. The firmware uses **115200**. The flash script enforces this; i
 
 ## Runtime
 
-### Resets / brown-outs once SIM800L is wired (P7+)
-Single biggest reliability issue on USB power. Symptoms: ESP32 reboots whenever the SIM800L tries to register on the network.
+### Resets / brown-outs once SIM800C is wired (P7+)
+Single biggest reliability issue on USB power. Symptoms: ESP32 reboots whenever the GSM module tries to register on the network. Less common on the SIM800C V6.1 board (onboard LDO smooths out current spikes), but still possible on cold-network handshake.
 
 **Fix order:**
-1. **1000 µF cap** directly across SIM800L `Vcc`/`GND` on the breadboard.
+1. **1000 µF cap** directly across the GSM module's `VCC`/`GND` on the breadboard.
 2. Stronger USB power source — USB power-bank ≥ 2 A, or a 5 V / 2 A wall adapter into a USB-power module.
-3. Eventually: dedicated 4 V / 2 A buck rail for SIM800L (v2 power architecture).
+3. Eventually: dedicated 4 V / 2 A buck rail for the GSM module (v2 power architecture).
 
 ### `WiFi connect timeout`
 - Verify `WIFI_SSID` and `WIFI_PASS` in `Secrets.h`.

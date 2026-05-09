@@ -7,18 +7,18 @@ Pin map, BOM, and wiring notes for Janus-firmware.
 | Component | Notes |
 |---|---|
 | ESP32-WROOM-32 (38-pin DevKit) | 3.3 V logic, dual-core 240 MHz, 4 MB flash. |
-| RFID reader (blue PCB) | Assumed PN532 over SPI. Fallback to MFRC522 via `#define RFID_DRIVER_MFRC522` in `Config.h`. |
-| SIM800L | 2.8 V logic on its TX line — voltage-divide before feeding ESP32 RX, or use a level shifter. |
-| DS3231 | Battery-backed RTC over I²C, address `0x68`. |
+| **MFRC522 (RC522)** RFID reader | Blue PCB, SPI interface, MIFARE / NTAG cards at 13.56 MHz. Library: `MFRC522` by miguelbalboa. |
+| **SIM800C V6.1** GSM/GPRS module | Same AT command set as SIM800L. The V6.1 carrier has an onboard LDO and level shifters, much friendlier on USB power than a raw SIM800L. |
+| **DS1302** RTC | Three-wire serial protocol (NOT I²C). Library: `Rtc by Makuna`, `ThreeWire` bus. Less accurate than the DS3231 (~5 ppm vs 2 ppm); refresh from server time periodically. |
 
 ## v1 pin map
 
 | Function | GPIO | Notes |
 |---|---|---|
-| **PN532 SPI** | SCK=18, MISO=19, MOSI=23, SS=5, IRQ=4 (optional) | Standard VSPI. Set the PN532's DIP switches to SPI mode. |
-| **DS3231 I²C** | SDA=21, SCL=22 | Default I²C. The future OLED shares this bus (different address). |
-| **SIM800L UART2** | TX (ESP32→SIM)=17, RX (SIM→ESP32)=16 | UART2 default pins. |
-| **SIM800L PWRKEY** | GPIO 25 | Reserved; most breakouts auto-start, leave unused. |
+| **MFRC522 SPI** | SCK=18, MISO=19, MOSI=23, SS=5, RST=4 | Standard VSPI. The RST pin is required by the MFRC522 chip (unlike PN532). |
+| **DS1302 ThreeWire** | CE=13, IO=14, SCLK=32 | Bit-banged 3-wire protocol; pick any 3 free GPIOs, not part of any peripheral bus. |
+| **SIM800C UART2** | TX (ESP32→SIM)=17, RX (SIM→ESP32)=16 | UART2 default. V6.1 board is 5 V tolerant on its UART, but if you ever sub in a raw SIM800L, voltage-divide the SIM-TX line. |
+| **SIM800C PWRKEY** | GPIO 25 | Reserved; V6.1 modules typically auto-start. |
 | **Built-in LED** | GPIO 2 | Boot/status indicator (steady, blinking, 3-pulse). |
 
 ### Reserved for v2
@@ -29,25 +29,35 @@ Pin map, BOM, and wiring notes for Janus-firmware.
 | IR beam input (E18-D80NK) | GPIO 34 | Input-only; external 10 kΩ pull-up (open-collector output). |
 | Buzzer MOSFET gate | GPIO 33 | PWM-capable. |
 | Tamper reed | GPIO 35 | Input-only; external 10 kΩ pull-up. |
-| SD CS | GPIO 15 | Shares VSPI bus with PN532 (different CS). |
-| OLED SSD1306 | shares 21/22 with RTC | I²C addresses don't collide (RTC `0x68`, SSD1306 `0x3C`). |
+| SD CS | GPIO 15 | Shares VSPI bus with MFRC522 (different CS). |
+| I²C bus (OLED) | SDA=21, SCL=22 | Free in v1 — reserved for the future SSD1306. The DS1302 does *not* use this bus. |
 
-## ⚠ SIM800L brown-outs
+## ⚠ SIM800C / SIM800L brown-outs
 
-The SIM800L pulls **2 A peaks** during transmission and is the #1 cause of resets on USB-powered breadboards.
+GSM TX peaks pull ~1–2 A on either module. The SIM800C V6.1 carrier has onboard regulation that helps, but USB power can still brown out on cold-network registration.
 
 **Mitigation in v1:**
-- Solder a **1000 µF electrolytic cap** directly across SIM800L `Vcc`/`GND` on the breadboard.
-- If the host PC's USB port still browns out the ESP32, power the board from a high-current USB power bank or a 5 V / ≥ 2 A wall adapter.
+- Solder a **1000 µF electrolytic cap** directly across the SIM800C `VCC`/`GND` pins on the breadboard.
+- If the host PC's USB port still resets the ESP32, power the board from a high-current USB power bank or a 5 V / ≥ 2 A wall adapter.
 
-**Long-term (v2):** SIM800L gets its own dedicated 4 V / 2 A buck rail, isolated from the ESP32's 5 V rail. Never share rails. See the reference design at `~/Armath/Arapi/Attendance_System/Armath_Attendance_System.html` for the full three-rail topology with ideal-diode UPS.
+**Long-term (v2):** the GSM module gets its own dedicated 4 V / 2 A buck rail, isolated from the ESP32's 5 V rail.
+
+## ⚠ DS1302 accuracy + battery
+
+The DS1302 is a much older, less accurate RTC than the DS3231 (no temperature compensation). Two implications for v1 firmware:
+
+- **Refresh from `server_time` aggressively.** P2's TimeKeeper still pulls NTP at boot and writes back to the DS1302, but the > 2 min drift gate against `/config.server_time` is what keeps long-running devices on time. Don't rely on the DS1302 for multi-day accuracy.
+- **The CR2032 holdover battery doesn't trickle-charge.** Plain DS1302 modules use a non-rechargeable cell — replace it once a year or whenever the firmware logs a "lostPower" warning at boot.
+
+Some DS1302 breakouts ship with a LIR2032 instead and a charge resistor — those *do* trickle-charge from the supply rail. Check your specific board.
 
 ## v2 BOM (to acquire)
 
 - **Fingerprint:** R503 capacitive (works through acrylic, 3.3 V native). Optical R307/AS608 is cheaper but doesn't penetrate enclosure material.
 - **IR beam:** E18-D80NK adjustable photoelectric switch.
-- **Display:** SSD1306 128×64 OLED, I²C.
+- **Display:** SSD1306 128×64 OLED, I²C — uses the bus that's free in v1 (SDA=21, SCL=22).
 - **microSD module:** SPI breakout for durable NDJSON event logging.
 - **Buzzer:** active 5 V buzzer + IRLZ44N MOSFET driver.
 - **Tamper:** magnetic reed switch (NC).
 - **Power:** 12 V / 3 A mains adapter, 2× 18650 with TP4056 charger + MT3608 booster, ideal-diode OR (LM66100 or Schottky), three buck/LDO rails.
+- **Optional RTC upgrade:** swap DS1302 → DS3231 once an I²C peripheral is being added anyway. Better accuracy, temp-compensated, fewer GPIOs (just SDA/SCL).

@@ -7,9 +7,9 @@ ESP32 (Arduino) firmware for **Janus**, the RFID + fingerprint entry-control sys
 ## v1 hardware target
 
 - **MCU:** ESP32-WROOM-32 (38-pin DevKit)
-- **RFID:** PN532 over SPI (fallback: MFRC522 behind `#define RFID_DRIVER_MFRC522`)
-- **GSM:** SIM800L over UART2 (SMS-only, on FreeRTOS task pinned to core 0)
-- **RTC:** DS3231 over I²C (battery-backed)
+- **RFID:** MFRC522 (RC522) over SPI
+- **GSM:** SIM800C V6.1 over UART2 (SMS-only, on FreeRTOS task pinned to core 0)
+- **RTC:** DS1302 over 3-wire serial (battery-backed)
 
 Deferred to v2 (parts not in hand): R503 fingerprint, E18-D80NK IR beam, SSD1306 OLED, microSD module, active buzzer + IRLZ44N driver, magnetic tamper reed, ideal-diode UPS power.
 
