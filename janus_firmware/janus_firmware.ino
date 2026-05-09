@@ -56,6 +56,36 @@ String buildAuthEventJson(const String& uid,
   return out;
 }
 
+String buildRejectedAuthBreachJson(const String& uid,
+                                   const String& occurredAtIso,
+                                   const String& eventId) {
+  JsonDocument doc;
+  doc["type"]             = "breach";
+  doc["reason"]           = "rejected_auth";
+  doc["attempted_source"] = "rfid";
+  doc["attempted_id"]     = uid;
+  doc["occurred_at"]      = occurredAtIso;
+  doc["event_id"]         = eventId;
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+void blinkAccepted() {
+  for (int i = 0; i < 2; ++i) {
+    digitalWrite(PIN_STATUS_LED, LOW);  delay(60);
+    digitalWrite(PIN_STATUS_LED, HIGH); delay(60);
+  }
+}
+
+void blinkRejected() {
+  // Three slower pulses — visually distinct from accepted's two quick blinks.
+  for (int i = 0; i < 3; ++i) {
+    digitalWrite(PIN_STATUS_LED, LOW);  delay(200);
+    digitalWrite(PIN_STATUS_LED, HIGH); delay(200);
+  }
+}
+
 void pollConfig() {
   ConfigResult cfg = gApi.getConfig();
   if (!cfg.ok) {
@@ -86,37 +116,34 @@ void handleCardTap(const String& uid) {
   bool known = gIdentity.contains(uid);
   AuthDecision d = AuthGate::decideRfid(known, gMode, gTime.isTimeSane());
 
-  switch (d) {
-    case AuthDecision::NoOp:
-      Serial.println(F("[main] gate: NoOp (time/mode)"));
-      return;
-    case AuthDecision::RejectedAuth:
-      // P5 will POST a breach here. P4 only ships the happy path.
-      Serial.println(F("[main] gate: RejectedAuth (P5 will post breach)"));
-      return;
-    case AuthDecision::LogAuth:
-      break;
+  if (d == AuthDecision::NoOp) {
+    Serial.println(F("[main] gate: NoOp (time/mode)"));
+    return;
   }
 
   String occurredAt = gTime.nowIso8601();
   String eventId    = mintEventId(DEVICE_ID);
-  String body       = buildAuthEventJson(uid, occurredAt, eventId);
+  const bool isBreach = (d == AuthDecision::RejectedAuth);
+  String body = isBreach
+      ? buildRejectedAuthBreachJson(uid, occurredAt, eventId)
+      : buildAuthEventJson(uid, occurredAt, eventId);
 
-  Serial.print(F("[main] POST /events  event_id="));
+  Serial.print(F("[main] POST /events  type="));
+  Serial.print(isBreach ? "breach" : "auth");
+  Serial.print(F("  event_id="));
   Serial.println(eventId);
 
   PostEventResult r = gApi.postEvent(body);
   if (r.ok) {
-    Serial.print(F("[main] auth logged"));
-    if (r.duplicate) Serial.print(F(" (duplicate, server already had it)"));
+    Serial.print(F("[main] "));
+    Serial.print(isBreach ? "breach (rejected_auth) recorded" : "auth logged");
+    if (r.duplicate) Serial.print(F(" (duplicate)"));
     Serial.println();
-    // Brief LED double-blink for "accepted".
-    for (int i = 0; i < 2; ++i) {
-      digitalWrite(PIN_STATUS_LED, LOW);  delay(60);
-      digitalWrite(PIN_STATUS_LED, HIGH); delay(60);
-    }
+    if (isBreach) blinkRejected(); else blinkAccepted();
   } else {
-    Serial.print(F("[main] auth post failed: "));
+    Serial.print(F("[main] post failed ("));
+    Serial.print(isBreach ? "breach" : "auth");
+    Serial.print(F("): "));
     Serial.println(r.error);
     // P6 will buffer this in the ring; for now the event is dropped.
   }
