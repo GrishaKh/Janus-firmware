@@ -3,7 +3,7 @@
 #pragma once
 
 // ----- Firmware version (printed at boot) -----
-#define JANUS_FW_VERSION "0.6.0-p5"
+#define JANUS_FW_VERSION "0.7.0-p6"
 
 // ----- RFID driver selection -----
 // Default: MFRC522 over SPI (the blue RC522 board). To experiment with PN532
@@ -55,6 +55,7 @@
 // ----- Intervals (milliseconds) -----
 #define HEARTBEAT_INTERVAL_MS    30000UL    // 30 s — /api/attendance/heartbeat
 #define CONFIG_POLL_INTERVAL_MS  300000UL   // 5 min — /api/attendance/config
+#define RESYNC_INTERVAL_MS       10000UL    // 10 s — drain ring via /resync when non-empty
 #define WIFI_RECONNECT_GRACE_MS  5000UL     // tolerate brief drops before reconnecting
 #define NTP_INITIAL_TIMEOUT_MS   10000UL    // give NTP this long at boot before falling back
 

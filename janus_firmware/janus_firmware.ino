@@ -8,6 +8,7 @@
 #include "ApiClient.h"
 #include "AuthGate.h"
 #include "Config.h"
+#include "EventBuffer.h"
 #include "IdentityCache.h"
 #include "Net.h"
 #include "RfidReader.h"
@@ -20,6 +21,7 @@ ApiClient      gApi(gNet);
 TimeKeeper     gTime;
 RfidReader     gRfid;
 IdentityCache  gIdentity;
+RamRingLogger  gRing;
 
 // Most recent device.mode from /config; drives AuthGate. Default to the
 // safe option until the first poll lands.
@@ -29,6 +31,7 @@ String         gMode = "attendance";
 uint32_t       gEventSeq = 0;
 
 unsigned long  gNextConfigPollAt = 0;
+unsigned long  gNextResyncAt     = 0;
 
 String mintEventId(const String& deviceId) {
   struct timeval tv;
@@ -128,6 +131,11 @@ void handleCardTap(const String& uid) {
       ? buildRejectedAuthBreachJson(uid, occurredAt, eventId)
       : buildAuthEventJson(uid, occurredAt, eventId);
 
+  // 1) Always ring it first — durable across a network blip.
+  gRing.record(eventId, body);
+
+  // 2) Try the immediate POST. On success, drop from the ring so the
+  //    drainer doesn't re-send. On failure, the drainer will pick it up.
   Serial.print(F("[main] POST /events  type="));
   Serial.print(isBreach ? "breach" : "auth");
   Serial.print(F("  event_id="));
@@ -139,14 +147,71 @@ void handleCardTap(const String& uid) {
     Serial.print(isBreach ? "breach (rejected_auth) recorded" : "auth logged");
     if (r.duplicate) Serial.print(F(" (duplicate)"));
     Serial.println();
+    gRing.dropOne(eventId);
     if (isBreach) blinkRejected(); else blinkAccepted();
   } else {
-    Serial.print(F("[main] post failed ("));
-    Serial.print(isBreach ? "breach" : "auth");
+    Serial.print(F("[main] post failed; left in ring (depth="));
+    Serial.print(gRing.pendingCount());
     Serial.print(F("): "));
     Serial.println(r.error);
-    // P6 will buffer this in the ring; for now the event is dropped.
+    if (isBreach) blinkRejected(); else blinkAccepted();
   }
+}
+
+void drainRing() {
+  if (gRing.pendingCount() == 0)         return;
+  if (!gNet.isOnline())                  return;
+  if (gNet.needsProvisioning())          return;
+
+  std::vector<PendingEvent> batch;
+  gRing.peekBatch(batch, RESYNC_BATCH_SIZE);
+  if (batch.empty()) return;
+
+  // Build the {"events":[...]} envelope by string concat — the per-event
+  // JSON in the ring is already valid, no need to round-trip ArduinoJson.
+  String body;
+  body.reserve(64 + batch.size() * 280);
+  body += F("{\"events\":[");
+  for (size_t i = 0; i < batch.size(); ++i) {
+    if (i > 0) body += ',';
+    body += batch[i].json;
+  }
+  body += F("]}");
+
+  Serial.print(F("[ring] /resync  size="));
+  Serial.println(batch.size());
+
+  ResyncResult r = gApi.resync(body);
+  if (!r.ok) {
+    Serial.print(F("[ring] resync failed: "));
+    Serial.println(r.error);
+    return;  // leave events in ring; retry next cycle
+  }
+
+  // The summary is aggregate (no per-event status). Drop the whole batch
+  // we sent — sending the same event_ids again on next cycle would just
+  // get 200/duplicate from the idempotent backend, but it's wasted RTT.
+  std::vector<String> ids;
+  ids.reserve(batch.size());
+  for (auto& e : batch) ids.push_back(e.eventId);
+  gRing.drop(ids);
+
+  Serial.print(F("[ring] resync OK: accepted="));
+  Serial.print(r.accepted);
+  Serial.print(F("  duplicates="));
+  Serial.print(r.duplicates);
+  if (r.maintenance_dropped) {
+    Serial.print(F("  maintenance_dropped="));
+    Serial.print(r.maintenance_dropped);
+  }
+  if (r.invalid || r.errors) {
+    Serial.print(F("  WARN invalid="));
+    Serial.print(r.invalid);
+    Serial.print(F(" errors="));
+    Serial.print(r.errors);
+  }
+  Serial.print(F("  remaining="));
+  Serial.println(gRing.pendingCount());
 }
 }  // namespace
 
@@ -188,6 +253,11 @@ void loop() {
   if ((long)(millis() - gNextConfigPollAt) >= 0) {
     pollConfig();
     gNextConfigPollAt = millis() + CONFIG_POLL_INTERVAL_MS;
+  }
+
+  if ((long)(millis() - gNextResyncAt) >= 0) {
+    drainRing();
+    gNextResyncAt = millis() + RESYNC_INTERVAL_MS;
   }
 
   String uid;

@@ -72,3 +72,34 @@ PostEventResult ApiClient::postEvent(const String& jsonBody) {
   }
   return out;
 }
+
+ResyncResult ApiClient::resync(const String& wrappedBody) {
+  ResyncResult out;
+  Net::Response r = _net.post("/api/attendance/resync", wrappedBody);
+  out.status = r.status;
+
+  if (r.status != 200) {
+    out.error = String("HTTP ") + r.status;
+    if (r.body.length() > 0 && r.body.length() < 200) {
+      out.error += " — " + r.body;
+    }
+    return out;
+  }
+
+  JsonDocument doc;
+  DeserializationError err = deserializeJson(doc, r.body);
+  if (err) {
+    out.error = String("json: ") + err.c_str();
+    return out;
+  }
+
+  JsonObjectConst s = doc["summary"];
+  out.accepted             = (int)(s["accepted_logs"]      | 0)
+                           + (int)(s["accepted_breaches"]  | 0);
+  out.duplicates           = (int)(s["duplicates"]         | 0);
+  out.maintenance_dropped  = (int)(s["maintenance_dropped"]| 0);
+  out.invalid              = (int)(s["invalid"]            | 0);
+  out.errors               = (int)(s["errors"]             | 0);
+  out.ok = true;
+  return out;
+}

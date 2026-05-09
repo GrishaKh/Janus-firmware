@@ -36,12 +36,30 @@ struct PostEventResult {
   String error;
 };
 
+struct ResyncResult {
+  bool ok = false;          // 200 with parseable summary
+  int  status = 0;
+  // Per-row outcomes from the server's summary block. Per the API contract
+  // accepted_* and duplicates BOTH count as "delivered, free the slot";
+  // invalid/errors are dropped (we don't retry per-row failures).
+  int  accepted = 0;
+  int  duplicates = 0;
+  int  maintenance_dropped = 0;
+  int  invalid = 0;
+  int  errors = 0;
+  String error;
+};
+
 class ApiClient {
  public:
   explicit ApiClient(Net& net) : _net(net) {}
 
   ConfigResult    getConfig();
   PostEventResult postEvent(const String& jsonBody);
+
+  // Send up to RESYNC_BATCH_SIZE pre-built event JSON bodies in one batch.
+  // The caller wraps the bodies into the `{"events":[...]}` envelope.
+  ResyncResult    resync(const String& wrappedBody);
 
  private:
   Net& _net;
