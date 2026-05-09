@@ -1,8 +1,10 @@
-// ApiClient.h — typed wrappers for the four Janus device endpoints.
-// Phase 1 ships only getConfig(); /events, /heartbeat, /resync land in P4..P8.
+// ApiClient.h — typed wrappers for the Janus device endpoints.
+// Phases ship incrementally: P1 added getConfig, P4 adds postEvent;
+// /heartbeat and /resync land in P6/P8.
 #pragma once
 
 #include <Arduino.h>
+#include <vector>
 
 #include "Net.h"
 
@@ -20,17 +22,26 @@ struct ConfigResult {
   String alarm_silenced_until;
   String server_time;         // ISO 8601
 
-  size_t enrolled_count = 0;
-  // P1 keeps the parser tiny: extract scalars + count, don't materialize
-  // the rfid/fingerprint/student_code arrays yet. P4 (IdentityCache) will
-  // re-parse the same body and populate them.
+  size_t              enrolled_count = 0;
+  std::vector<String> rfid_uids;   // populated for IdentityCache (P4)
+  // fingerprint_ids[] / student_codes[] / admin_phones[] land when their
+  // consumers do (fingerprint in v2, SMS in P7, etc.). Skip for now.
+};
+
+struct PostEventResult {
+  bool   ok = false;        // 201, 200-duplicate, or 200-maintenance_dropped
+  int    status = 0;
+  bool   duplicate = false;
+  bool   maintenance_dropped = false;
+  String error;
 };
 
 class ApiClient {
  public:
   explicit ApiClient(Net& net) : _net(net) {}
 
-  ConfigResult getConfig();
+  ConfigResult    getConfig();
+  PostEventResult postEvent(const String& jsonBody);
 
  private:
   Net& _net;
