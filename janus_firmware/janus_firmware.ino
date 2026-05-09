@@ -10,10 +10,12 @@
 #include "ApiClient.h"
 #include "Config.h"
 #include "Net.h"
+#include "TimeKeeper.h"
 
 namespace {
-Net        gNet;
-ApiClient  gApi(gNet);
+Net          gNet;
+ApiClient    gApi(gNet);
+TimeKeeper   gTime;
 
 // Pull /config every CONFIG_POLL_INTERVAL_MS so the dashboard stays
 // reflective of latest state. P4 will hook the result into IdentityCache.
@@ -39,6 +41,12 @@ void pollConfig() {
   Serial.print(cfg.enrolled_count);
   Serial.println(F(" cards"));
   Serial.print(F("  server_time  = ")); Serial.println(cfg.server_time);
+  Serial.print(F("  device_time  = ")); Serial.println(gTime.nowIso8601());
+  Serial.print(F("  time_sane    = ")); Serial.println(gTime.isTimeSane() ? "yes" : "no");
+
+  if (cfg.server_time.length() > 0) {
+    gTime.noteServerTime(cfg.server_time);
+  }
 }
 }  // namespace
 
@@ -57,6 +65,10 @@ void setup() {
   if (!gNet.isOnline()) {
     Serial.println(F("[main] WiFi not up after begin() — will retry on next poll"));
   }
+
+  // Time has to come up after WiFi (so NTP can sync) but before any event
+  // POSTs would happen. P1's loop has no event POSTs yet, so order is fine.
+  gTime.begin();
 
   // Kick the first /config fetch immediately, then on the configured cadence.
   pollConfig();
