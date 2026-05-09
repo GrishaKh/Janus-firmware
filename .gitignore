@@ -17,6 +17,9 @@ arduino-cli.yaml
 .vscode/
 .idea/
 .DS_Store
+*.swp
+*.swo
+*~
 
 # OS
 Thumbs.db
