@@ -3,7 +3,7 @@
 #pragma once
 
 // ----- Firmware version (printed at boot) -----
-#define JANUS_FW_VERSION "0.1.0-p0"
+#define JANUS_FW_VERSION "0.2.0-p1"
 
 // ----- RFID driver selection -----
 // Default: PN532 over SPI (matches the blue Adafruit-style board).
