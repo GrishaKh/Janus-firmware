@@ -43,6 +43,13 @@ ConfigResult ApiClient::getConfig() {
     if (s != nullptr) out.rfid_uids.push_back(String(s));
   }
 
+  JsonArrayConst phoneArr = doc["admin_phones"];
+  out.admin_phones.reserve(phoneArr.size());
+  for (JsonVariantConst v : phoneArr) {
+    const char* s = v.as<const char*>();
+    if (s != nullptr && s[0] != '\0') out.admin_phones.push_back(String(s));
+  }
+
   out.ok = true;
   return out;
 }

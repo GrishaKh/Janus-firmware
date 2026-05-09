@@ -13,6 +13,7 @@
 #include "Net.h"
 #include "RfidReader.h"
 #include "Secrets.h"
+#include "SmsSender.h"
 #include "TimeKeeper.h"
 
 namespace {
@@ -22,10 +23,12 @@ TimeKeeper     gTime;
 RfidReader     gRfid;
 IdentityCache  gIdentity;
 RamRingLogger  gRing;
+SmsSender      gSms;
 
 // Most recent device.mode from /config; drives AuthGate. Default to the
 // safe option until the first poll lands.
-String         gMode = "attendance";
+String                gMode = "attendance";
+std::vector<String>   gAdminPhones;
 
 // Counter component of `event_id` to disambiguate same-millisecond posts.
 uint32_t       gEventSeq = 0;
@@ -110,6 +113,9 @@ void pollConfig() {
   if (cfg.server_time.length() > 0) gTime.noteServerTime(cfg.server_time);
   gMode = cfg.mode;
   gIdentity.update(cfg.rfid_uids);
+  gAdminPhones = cfg.admin_phones;
+  Serial.print(F("  admin_phones = "));
+  Serial.println(gAdminPhones.size());
 }
 
 void handleCardTap(const String& uid) {
@@ -133,6 +139,13 @@ void handleCardTap(const String& uid) {
 
   // 1) Always ring it first — durable across a network blip.
   gRing.record(eventId, body);
+
+  // 1b) Fire SMS independently of POST. SMS goes through SIM, not WiFi —
+  //     even if WiFi is down the alert still reaches the admin's phone.
+  if (isBreach && !gAdminPhones.empty()) {
+    String alert = String("[Janus] ") + DEVICE_ID + " rejected UID " + uid;
+    gSms.enqueue(gAdminPhones[0], alert);
+  }
 
   // 2) Try the immediate POST. On success, drop from the ring so the
   //    drainer doesn't re-send. On failure, the drainer will pick it up.
@@ -234,6 +247,7 @@ void setup() {
   gTime.begin();
   gIdentity.begin();
   gRfid.begin();
+  gSms.begin();
 
   // Kick the first /config fetch immediately, then on the configured cadence.
   pollConfig();

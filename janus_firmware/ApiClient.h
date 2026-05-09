@@ -23,9 +23,10 @@ struct ConfigResult {
   String server_time;         // ISO 8601
 
   size_t              enrolled_count = 0;
-  std::vector<String> rfid_uids;   // populated for IdentityCache (P4)
-  // fingerprint_ids[] / student_codes[] / admin_phones[] land when their
-  // consumers do (fingerprint in v2, SMS in P7, etc.). Skip for now.
+  std::vector<String> rfid_uids;     // populated for IdentityCache (P4)
+  std::vector<String> admin_phones;  // populated for SmsSender (P7)
+  // fingerprint_ids[] / student_codes[] land when v2 fingerprint hardware
+  // arrives — skip parsing them for now to keep the JSON pass small.
 };
 
 struct PostEventResult {
