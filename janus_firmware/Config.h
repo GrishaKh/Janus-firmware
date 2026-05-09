@@ -3,7 +3,7 @@
 #pragma once
 
 // ----- Firmware version (printed at boot) -----
-#define JANUS_FW_VERSION "0.3.0-p2"
+#define JANUS_FW_VERSION "0.4.0-p3"
 
 // ----- RFID driver selection -----
 // Default: MFRC522 over SPI (the blue RC522 board). To experiment with PN532

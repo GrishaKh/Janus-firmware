@@ -7,7 +7,7 @@
 # verify the build is green, commit the change.
 
 ArduinoJson@7.2.0
-MFRC522@1.4.11
+MFRC522@1.4.12
 TinyGSM@0.12.0
 Rtc by Makuna@2.5.0
 StreamDebugger@1.0.1

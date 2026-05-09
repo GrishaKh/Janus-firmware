@@ -10,12 +10,14 @@
 #include "ApiClient.h"
 #include "Config.h"
 #include "Net.h"
+#include "RfidReader.h"
 #include "TimeKeeper.h"
 
 namespace {
 Net          gNet;
 ApiClient    gApi(gNet);
 TimeKeeper   gTime;
+RfidReader   gRfid;
 
 // Pull /config every CONFIG_POLL_INTERVAL_MS so the dashboard stays
 // reflective of latest state. P4 will hook the result into IdentityCache.
@@ -70,6 +72,8 @@ void setup() {
   // POSTs would happen. P1's loop has no event POSTs yet, so order is fine.
   gTime.begin();
 
+  gRfid.begin();
+
   // Kick the first /config fetch immediately, then on the configured cadence.
   pollConfig();
   gNextConfigPollAt = millis() + CONFIG_POLL_INTERVAL_MS;
@@ -91,7 +95,22 @@ void loop() {
     gNextConfigPollAt = millis() + CONFIG_POLL_INTERVAL_MS;
   }
 
-  // Steady LED while online, off while disconnected — cheap status hint.
-  digitalWrite(PIN_STATUS_LED, gNet.isOnline() ? HIGH : LOW);
-  delay(200);
+  // RFID is the fastest-changing input — poll it every loop tick so a card
+  // tap registers within ~50 ms. P3 just prints; P4 will route through
+  // IdentityCache and AuthGate.
+  String uid;
+  if (gRfid.poll(uid)) {
+    Serial.print(F("[main] RFID UID: "));
+    Serial.print(uid);
+    Serial.print(F("  ("));
+    Serial.print(uid.length() / 2);
+    Serial.println(F(" bytes)"));
+    digitalWrite(PIN_STATUS_LED, LOW);
+    delay(60);
+    digitalWrite(PIN_STATUS_LED, HIGH);
+  } else {
+    digitalWrite(PIN_STATUS_LED, gNet.isOnline() ? HIGH : LOW);
+  }
+
+  delay(50);
 }
